@@ -9,7 +9,7 @@ export const load: PageServerLoad = async () => {
 			.order('created_at', { ascending: false }),
 		supabaseAdmin
 			.from('calls')
-			.select('*, script:scripts(name)')
+			.select('*, script:scripts(name), analysis:call_analyses(summary, sentiment, key_topics)')
 			.order('started_at', { ascending: false })
 			.limit(20)
 	]);

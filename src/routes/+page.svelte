@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
@@ -8,7 +8,6 @@
 	const { data } = $props();
 
 	onMount(() => {
-		// Listen for new/updated calls via Supabase Realtime
 		const channel = supabase
 			.channel('dashboard-calls')
 			.on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => {
@@ -25,6 +24,12 @@
 		autoservice: 'Автосервіс'
 	};
 
+	const sentimentEmoji: Record<string, string> = {
+		positive: '😊',
+		neutral: '😐',
+		negative: '😠'
+	};
+
 	function formatDate(dateStr: string): string {
 		return new Date(dateStr).toLocaleString('uk-UA', {
 			day: '2-digit',
@@ -35,11 +40,17 @@
 	}
 
 	function formatDuration(call: Call): string {
-		if (!call.ended_at) return '...';
+		if (!call.ended_at) return 'в процесі...';
 		const ms = new Date(call.ended_at).getTime() - new Date(call.started_at).getTime();
 		const secs = Math.floor(ms / 1000);
 		const mins = Math.floor(secs / 60);
 		return mins > 0 ? `${mins}хв ${secs % 60}с` : `${secs}с`;
+	}
+
+	async function deleteCall(callId: string) {
+		if (!confirm('Видалити дзвінок?')) return;
+		await fetch(`/api/calls/${callId}`, { method: 'DELETE' });
+		await invalidateAll();
 	}
 </script>
 
@@ -110,44 +121,63 @@
 				<p class="text-surface-500">Дзвінків ще не було</p>
 			</div>
 		{:else}
-			<div class="overflow-hidden rounded-xl border border-surface-800">
-				<table class="w-full text-sm">
-					<thead class="border-b border-surface-800 bg-surface-900">
-						<tr>
-							<th class="px-4 py-3 text-left font-medium text-surface-400">Напрямок</th>
-							<th class="px-4 py-3 text-left font-medium text-surface-400">Номер</th>
-							<th class="px-4 py-3 text-left font-medium text-surface-400">Скрипт</th>
-							<th class="px-4 py-3 text-left font-medium text-surface-400">Статус</th>
-							<th class="px-4 py-3 text-left font-medium text-surface-400">Тривалість</th>
-							<th class="px-4 py-3 text-left font-medium text-surface-400">Дата</th>
-							<th class="px-4 py-3"></th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-surface-800">
-						{#each data.calls as call (call.id)}
-							<tr class="transition-colors hover:bg-surface-900/50">
-								<td class="px-4 py-3">
-									<span class="text-xs {call.direction === 'inbound' ? 'text-blue-400' : 'text-green-400'}">
+			<div class="space-y-3">
+				{#each data.calls as call (call.id)}
+					<a
+						href={call.status === 'active' ? `/calls/${call.id}/live` : `/calls/${call.id}`}
+						class="group block rounded-xl border border-surface-800 bg-surface-900 p-4 transition-colors hover:border-surface-700"
+					>
+						<div class="flex items-start justify-between">
+							<div class="flex-1">
+								<div class="flex items-center gap-3">
+									<span class="text-sm font-medium {call.direction === 'inbound' ? 'text-blue-400' : 'text-green-400'}">
 										{call.direction === 'inbound' ? '← Вхідний' : '→ Вихідний'}
 									</span>
-								</td>
-								<td class="px-4 py-3 font-mono text-surface-300">{call.phone_number}</td>
-								<td class="px-4 py-3 text-surface-300">{call.script?.name ?? '—'}</td>
-								<td class="px-4 py-3"><StatusBadge status={call.status} /></td>
-								<td class="px-4 py-3 text-surface-400">{formatDuration(call)}</td>
-								<td class="px-4 py-3 text-surface-400">{formatDate(call.started_at)}</td>
-								<td class="px-4 py-3">
-									<a
-										href={call.status === 'active' ? `/calls/${call.id}/live` : `/calls/${call.id}`}
-										class="text-accent hover:text-accent-light"
-									>
-										{call.status === 'active' ? 'Live' : 'Деталі'}
-									</a>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+									<span class="font-mono text-sm text-surface-300">{call.phone_number}</span>
+									<StatusBadge status={call.status} />
+									{#if call.status === 'active'}
+										<span class="inline-flex items-center gap-1.5 text-xs text-green-400">
+											<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500"></span>
+											Live
+										</span>
+									{/if}
+								</div>
+
+								<div class="mt-1 flex items-center gap-3 text-xs text-surface-500">
+									<span>{call.script?.name ?? '—'}</span>
+									<span>{formatDuration(call)}</span>
+									<span>{formatDate(call.started_at)}</span>
+								</div>
+
+								{#if call.analysis?.[0]?.summary}
+									<div class="mt-2 flex items-start gap-2">
+										<span class="text-sm">{sentimentEmoji[call.analysis[0].sentiment] ?? ''}</span>
+										<p class="line-clamp-2 text-xs leading-relaxed text-surface-400">
+											{call.analysis[0].summary}
+										</p>
+									</div>
+									{#if call.analysis[0].key_topics?.length}
+										<div class="mt-1.5 flex flex-wrap gap-1">
+											{#each call.analysis[0].key_topics.slice(0, 4) as topic}
+												<span class="rounded bg-surface-800 px-1.5 py-0.5 text-[10px] text-surface-400">{topic}</span>
+											{/each}
+										</div>
+									{/if}
+								{/if}
+							</div>
+
+							<button
+								onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); deleteCall(call.id); }}
+								class="ml-4 rounded p-1.5 text-surface-600 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+								title="Видалити"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+								</svg>
+							</button>
+						</div>
+					</a>
+				{/each}
 			</div>
 		{/if}
 	</section>

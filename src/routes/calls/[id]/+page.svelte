@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import TranscriptView from '$lib/components/TranscriptView.svelte';
 	import AudioPlayer from '$lib/components/AudioPlayer.svelte';
@@ -25,6 +26,12 @@
 			reanalyzing = false;
 		}
 	}
+
+	async function deleteCall() {
+		if (!confirm('Видалити дзвінок?')) return;
+		await fetch(`/api/calls/${data.call.id}`, { method: 'DELETE' });
+		goto('/');
+	}
 </script>
 
 <div class="mx-auto max-w-4xl space-y-6">
@@ -32,19 +39,29 @@
 	<div class="flex items-start justify-between">
 		<div>
 			<div class="mb-1 flex items-center gap-3">
+				<a href="/" class="text-surface-400 transition-colors hover:text-surface-200" title="На дашборд">
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+					</svg>
+				</a>
 				<h1 class="text-2xl font-bold text-surface-100">
-					{data.call.direction === 'inbound' ? '← Вхідний дзвінок' : '→ Вихідний дзвінок'}
+					{data.call.direction === 'inbound' ? 'Вхідний дзвінок' : 'Вихідний дзвінок'}
 				</h1>
 				<StatusBadge status={data.call.status} />
 			</div>
-			<div class="flex items-center gap-4 text-sm text-surface-400">
+			<div class="ml-8 flex items-center gap-4 text-sm text-surface-400">
 				<span class="font-mono">{data.call.phone_number}</span>
 				<span>{data.call.script?.name ?? '—'}</span>
 				<span>{formatDuration()}</span>
 				<span>{new Date(data.call.started_at).toLocaleString('uk-UA')}</span>
 			</div>
 		</div>
-		<a href="/" class="text-sm text-surface-400 hover:text-surface-200">← Назад</a>
+		<button
+			onclick={deleteCall}
+			class="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-500/10"
+		>
+			Видалити
+		</button>
 	</div>
 
 	<!-- Audio Player -->
@@ -52,29 +69,29 @@
 		<AudioPlayer url={data.call.audio_url} />
 	{/if}
 
-	<!-- Transcript -->
-	<div class="rounded-xl border border-surface-800 bg-surface-900 p-6">
-		<h3 class="mb-4 text-lg font-semibold text-surface-100">Транскрипт</h3>
-		{#if data.transcript.length > 0}
-			<TranscriptView entries={data.transcript} />
-		{:else}
-			<p class="text-sm text-surface-500">Транскрипт відсутній</p>
-		{/if}
-	</div>
-
-	<!-- Analysis -->
+	<!-- Analysis first (more important for demo) -->
 	{#if data.analysis}
 		<AnalysisCard analysis={data.analysis} />
 	{/if}
 
-	<!-- Re-analyze button -->
+	<!-- Transcript -->
 	{#if data.transcript.length > 0}
-		<button
-			onclick={reanalyze}
-			disabled={reanalyzing}
-			class="rounded-lg border border-surface-700 px-4 py-2 text-sm text-surface-300 transition-colors hover:bg-surface-800 disabled:opacity-50"
-		>
-			{reanalyzing ? 'Аналізуємо...' : 'Перезапустити аналіз'}
-		</button>
+		<div class="rounded-xl border border-surface-800 bg-surface-900 p-6">
+			<h3 class="mb-4 text-lg font-semibold text-surface-100">Транскрипт</h3>
+			<TranscriptView entries={data.transcript} />
+		</div>
 	{/if}
+
+	<!-- Actions -->
+	<div class="flex gap-3">
+		{#if data.transcript.length > 0}
+			<button
+				onclick={reanalyze}
+				disabled={reanalyzing}
+				class="rounded-lg border border-surface-700 px-4 py-2 text-sm text-surface-300 transition-colors hover:bg-surface-800 disabled:opacity-50"
+			>
+				{reanalyzing ? 'Аналізуємо...' : 'Перезапустити аналіз'}
+			</button>
+		{/if}
+	</div>
 </div>
