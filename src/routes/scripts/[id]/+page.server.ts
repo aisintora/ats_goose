@@ -1,6 +1,6 @@
 import { error, redirect, fail } from '@sveltejs/kit';
 import { supabaseAdmin } from '$lib/server/supabase';
-import { createAgent, updateAgent } from '$lib/server/elevenlabs';
+import { createAgent, updateAgent, deleteAgent } from '$lib/server/elevenlabs';
 import type { PageServerLoad, Actions } from './$types';
 import type { Script } from '$lib/types';
 
@@ -60,7 +60,39 @@ export const actions: Actions = {
 	},
 
 	delete: async ({ params }) => {
-		await supabaseAdmin.from('scripts').delete().eq('id', params.id);
+		// Get script to find agent_id before deleting
+		const { data: script } = await supabaseAdmin
+			.from('scripts')
+			.select('agent_id, is_active')
+			.eq('id', params.id)
+			.single();
+
+		if (!script) error(404, 'Скрипт не знайдено');
+
+		if (script.is_active) {
+			return fail(400, { error: 'Не можна видалити активний скрипт. Спочатку активуйте інший.' });
+		}
+
+		// Delete ElevenLabs agent
+		if (script.agent_id) {
+			try {
+				await deleteAgent(script.agent_id);
+			} catch (e) {
+				console.error('Failed to delete ElevenLabs agent:', e);
+			}
+		}
+
+		// Delete script (calls will have script_id set to null via FK)
+		const { error: dbError } = await supabaseAdmin
+			.from('scripts')
+			.delete()
+			.eq('id', params.id);
+
+		if (dbError) {
+			console.error('Delete failed:', dbError);
+			return fail(500, { error: `Помилка видалення: ${dbError.message}` });
+		}
+
 		redirect(303, '/');
 	}
 };

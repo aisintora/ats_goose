@@ -1,10 +1,16 @@
 <script lang="ts">
 	import ScriptForm from '$lib/components/ScriptForm.svelte';
 
-	const { data } = $props();
+	const { data, form } = $props();
 </script>
 
 <div class="mx-auto max-w-3xl">
+	{#if form?.error}
+		<div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+			{form.error}
+		</div>
+	{/if}
+
 	<div class="mb-6 flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-surface-100">Редагувати скрипт</h1>
 		<form method="POST" action="?/delete">
