@@ -1,8 +1,23 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
+	import { supabase } from '$lib/supabase';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import type { Call } from '$lib/types';
 
 	const { data } = $props();
+
+	onMount(() => {
+		// Listen for new/updated calls via Supabase Realtime
+		const channel = supabase
+			.channel('dashboard-calls')
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => {
+				invalidateAll();
+			})
+			.subscribe();
+
+		return () => { channel.unsubscribe(); };
+	});
 
 	const businessTypeLabels: Record<string, string> = {
 		hotel: 'Готель',
