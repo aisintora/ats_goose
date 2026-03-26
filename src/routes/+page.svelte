@@ -167,20 +167,37 @@
 									<span>{formatDate(call.started_at)}</span>
 								</div>
 
-								{#if call.analysis?.[0]?.summary}
-									<div class="mt-2 flex items-start gap-2">
-										<span class="text-sm">{sentimentEmoji[call.analysis[0].sentiment] ?? ''}</span>
-										<p class="line-clamp-2 text-xs leading-relaxed text-surface-400">
-											{call.analysis[0].summary}
-										</p>
-									</div>
-									{#if call.analysis[0].key_topics?.length}
-										<div class="mt-1.5 flex flex-wrap gap-1">
-											{#each call.analysis[0].key_topics.slice(0, 4) as topic}
-												<span class="rounded bg-surface-800 px-1.5 py-0.5 text-[10px] text-surface-400">{topic}</span>
-											{/each}
+								{@const a = call.analysis?.[0]}
+								{#if a?.summary}
+									<div class="mt-3 rounded-lg bg-surface-800/50 px-3 py-2.5">
+										<div class="flex items-start gap-2">
+											<span class="mt-0.5 text-base">{sentimentEmoji[a.sentiment] ?? '😐'}</span>
+											<div class="flex-1">
+												<p class="line-clamp-2 text-xs leading-relaxed text-surface-300">
+													{a.summary}
+												</p>
+												<div class="mt-2 flex items-center gap-3">
+													<div class="flex items-center gap-1.5">
+														<span class="text-[10px] text-surface-500">Скрипт:</span>
+														<div class="h-1.5 w-16 overflow-hidden rounded-full bg-surface-700">
+															<div
+																class="h-full rounded-full {a.script_adherence >= 70 ? 'bg-green-500' : a.script_adherence >= 40 ? 'bg-yellow-500' : 'bg-red-500'}"
+																style="width: {a.script_adherence}%"
+															></div>
+														</div>
+														<span class="text-[10px] font-medium {a.script_adherence >= 70 ? 'text-green-400' : a.script_adherence >= 40 ? 'text-yellow-400' : 'text-red-400'}">{a.script_adherence}%</span>
+													</div>
+												</div>
+											</div>
 										</div>
-									{/if}
+										{#if a.key_topics?.length}
+											<div class="mt-2 flex flex-wrap gap-1">
+												{#each a.key_topics.slice(0, 5) as topic}
+													<span class="rounded bg-surface-700 px-1.5 py-0.5 text-[10px] text-surface-400">{topic}</span>
+												{/each}
+											</div>
+										{/if}
+									</div>
 								{/if}
 							</div>
 
