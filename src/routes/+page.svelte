@@ -9,8 +9,11 @@
 
 	onMount(() => {
 		const channel = supabase
-			.channel('dashboard-calls')
+			.channel('dashboard-realtime')
 			.on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => {
+				invalidateAll();
+			})
+			.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'call_analyses' }, () => {
 				invalidateAll();
 			})
 			.subscribe();
@@ -197,6 +200,11 @@
 												{/each}
 											</div>
 										{/if}
+									</div>
+								{:else if call.status === 'completed'}
+									<div class="mt-3 flex items-center gap-2 rounded-lg bg-surface-800/50 px-3 py-2.5">
+										<div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
+										<span class="text-xs text-surface-400">Аналіз дзвінка в процесі...</span>
 									</div>
 								{/if}
 							</div>
