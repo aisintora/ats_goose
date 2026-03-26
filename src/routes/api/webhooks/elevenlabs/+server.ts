@@ -8,57 +8,41 @@ export const POST: RequestHandler = async ({ request }) => {
 	const payload = await request.json();
 	console.log('Webhook received:', JSON.stringify(payload).slice(0, 800));
 
-	// Determine event type
 	const eventType = payload.type ?? payload.event_type ?? 'unknown';
 	const conversationId =
 		payload.data?.conversation_id ??
 		payload.conversation_id;
 
-	// --- CALL INITIATION (початок дзвінка) ---
-	if (eventType === 'conversation_initiation' || eventType === 'call.initiated' || payload.conversation_initiation_client_data) {
-		if (!conversationId) {
-			// Return empty conversation_initiation_client_data to ElevenLabs
-			return json({ dynamic_variables: {} });
-		}
-
-		// Check if call already exists
-		const { data: existing } = await supabaseAdmin
-			.from('calls')
-			.select('id')
-			.eq('conversation_id', conversationId)
-			.single();
-
-		if (!existing) {
-			// Find script by agent_id
-			const agentId = payload.data?.agent_id ?? payload.agent_id;
-			const { data: script } = await supabaseAdmin
-				.from('scripts')
-				.select('id')
-				.eq('agent_id', agentId)
-				.single();
-
-			if (script) {
-				const phoneNumber = payload.data?.from_number ?? payload.from_number ?? 'incoming';
-
-				await supabaseAdmin.from('calls').insert({
-					script_id: script.id,
-					direction: 'inbound',
-					phone_number: phoneNumber,
-					status: 'active',
-					conversation_id: conversationId
-				});
-				console.log(`Call started: ${conversationId}`);
-			}
-		}
-
+	// --- CALL INITIATION ---
+	if (eventType === 'conversation_initiation' || payload.conversation_initiation_client_data) {
 		return json({ dynamic_variables: {} });
 	}
 
-	// --- POST-CALL (кінець дзвінка) ---
+	// --- POST-CALL ---
 	if (!conversationId) {
 		console.log('No conversation_id, skipping');
 		return json({ ok: true, skipped: true });
 	}
+
+	// Always fetch full conversation data from ElevenLabs
+	let conversation;
+	try {
+		conversation = await getConversation(conversationId);
+	} catch (e) {
+		console.error('Failed to fetch conversation:', e);
+		return json({ ok: false });
+	}
+
+	// Extract real data from ElevenLabs
+	const phoneNumber =
+		conversation.metadata?.phone_call?.external_number ??
+		conversation.metadata?.phone_call?.from_number ??
+		'unknown';
+	const startTime = conversation.metadata?.start_time_unix_secs
+		? new Date(conversation.metadata.start_time_unix_secs * 1000).toISOString()
+		: new Date().toISOString();
+	const duration = conversation.metadata?.call_duration_secs ?? 0;
+	const endTime = new Date(new Date(startTime).getTime() + duration * 1000).toISOString();
 
 	// Find existing call or create one
 	let { data: call } = await supabaseAdmin
@@ -68,15 +52,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		.single();
 
 	if (!call) {
-		// Call not tracked yet — create from ElevenLabs data
-		let conversation;
-		try {
-			conversation = await getConversation(conversationId);
-		} catch (e) {
-			console.error('Failed to fetch conversation:', e);
-			return json({ ok: false });
-		}
-
 		const { data: script } = await supabaseAdmin
 			.from('scripts')
 			.select('id')
@@ -88,9 +63,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ ok: false });
 		}
 
-		const phoneNumber =
-			conversation.metadata?.phone_call?.from_number ?? 'unknown';
-
 		const { data: newCall } = await supabaseAdmin
 			.from('calls')
 			.insert({
@@ -99,7 +71,8 @@ export const POST: RequestHandler = async ({ request }) => {
 				phone_number: phoneNumber,
 				status: 'completed',
 				conversation_id: conversationId,
-				ended_at: new Date().toISOString()
+				started_at: startTime,
+				ended_at: endTime
 			})
 			.select()
 			.single();
@@ -107,19 +80,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!newCall) return json({ ok: false });
 		call = newCall;
 	} else {
-		// Update status to completed
+		// Update with real data from ElevenLabs
 		await supabaseAdmin
 			.from('calls')
-			.update({ status: 'completed', ended_at: new Date().toISOString() })
+			.update({
+				status: 'completed',
+				phone_number: phoneNumber !== 'unknown' ? phoneNumber : undefined,
+				started_at: startTime,
+				ended_at: endTime
+			})
 			.eq('id', call.id);
 	}
 
-	// Fetch and store transcript
+	// Store transcript
 	try {
-		const conversation = await getConversation(conversationId);
-
 		if (conversation.transcript?.length) {
-			// Delete old entries if re-processing
 			await supabaseAdmin
 				.from('transcript_entries')
 				.delete()
@@ -135,7 +110,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			await supabaseAdmin.from('transcript_entries').insert(entries);
 		}
 
-		// Fetch and store audio
+		// Store audio
 		if (conversation.has_audio) {
 			try {
 				const audioBuffer = await getConversationAudio(conversationId);
