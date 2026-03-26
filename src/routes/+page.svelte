@@ -167,8 +167,8 @@
 									<span>{formatDate(call.started_at)}</span>
 								</div>
 
+								{#if (Array.isArray(call.analysis) ? call.analysis[0] : call.analysis)?.summary}
 								{@const a = Array.isArray(call.analysis) ? call.analysis[0] : call.analysis}
-								{#if a?.summary}
 									<div class="mt-3 rounded-lg bg-surface-800/50 px-3 py-2.5">
 										<div class="flex items-start gap-2">
 											<span class="mt-0.5 text-base">{sentimentEmoji[a.sentiment] ?? '😐'}</span>
