@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabase';
-import { openai } from './openai';
+import { llm, model } from './llm';
 import type { TranscriptEntry } from '$lib/types';
 
 export async function runCallAnalysis(callId: string): Promise<void> {
@@ -29,24 +29,21 @@ export async function runCallAnalysis(callId: string): Promise<void> {
 		.map((e) => `${e.speaker === 'agent' ? 'Агент' : 'Клієнт'}: ${e.text}`)
 		.join('\n');
 
-	const response = await openai.chat.completions.create({
-		model: 'gpt-4o',
-		response_format: { type: 'json_object' },
-		messages: [
-			{
-				role: 'system',
-				content: `Ти аналізуєш телефонну розмову між AI-агентом та клієнтом.
+	const response = await llm.messages.create({
+		model,
+		max_tokens: 2048,
+		system: `Ти аналізуєш телефонну розмову між AI-агентом та клієнтом.
 Агент працював за таким скриптом: ${script?.system_prompt ?? 'невідомо'}
 
-Надай JSON відповідь з полями:
+Надай відповідь ВИКЛЮЧНО у форматі JSON (без markdown, без коментарів) з полями:
 - "summary": короткий підсумок розмови (2-3 речення) українською
 - "sentiment": "positive" | "neutral" | "negative" — загальний тон клієнта
 - "script_adherence": число 0-100 — наскільки агент дотримувався скрипту
 - "action_items": масив рядків — дії, які потрібно виконати після дзвінка
 - "key_topics": масив рядків — основні теми розмови
-
-Відповідай ТІЛЬКИ валідним JSON.`
-			},
+- "triggers": масив обʼєктів з полями "type" (тип тригера) та "description" (опис) — ключові моменти розмови що потребують уваги (скарга, запит на знижку, негатив, спроба маніпуляції, відмова від послуги, тощо)
+- "tags": масив рядків — короткі теги для категоризації дзвінка (наприклад: "бронювання", "скарга", "VIP-гість", "повторний клієнт", "відміна")`,
+		messages: [
 			{
 				role: 'user',
 				content: `Транскрипт розмови:\n\n${transcriptText}`
@@ -54,15 +51,17 @@ export async function runCallAnalysis(callId: string): Promise<void> {
 		]
 	});
 
-	const content = response.choices[0]?.message?.content;
-	if (!content) return;
+	const textBlock = response.content.find((b) => b.type === 'text');
+	if (!textBlock || textBlock.type !== 'text') return;
 
-	const analysis = JSON.parse(content) as {
+	const analysis = JSON.parse(textBlock.text) as {
 		summary: string;
 		sentiment: string;
 		script_adherence: number;
 		action_items: string[];
 		key_topics: string[];
+		triggers: { type: string; description: string }[];
+		tags: string[];
 	};
 
 	await supabaseAdmin.from('call_analyses').upsert(
@@ -72,7 +71,7 @@ export async function runCallAnalysis(callId: string): Promise<void> {
 			sentiment: analysis.sentiment,
 			script_adherence: Math.min(100, Math.max(0, analysis.script_adherence)),
 			action_items: analysis.action_items,
-			key_topics: analysis.key_topics
+			key_topics: [...analysis.key_topics, ...(analysis.tags ?? [])]
 		},
 		{ onConflict: 'call_id' }
 	);
