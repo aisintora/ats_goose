@@ -13,11 +13,11 @@ export const POST: RequestHandler = async ({ params }) => {
 	if (!script) error(404, 'Script not found');
 	if (!script.agent_id) error(400, 'Script not synced with voice agent');
 
-	// Deactivate all scripts
+	// Deactivate all other scripts
 	await supabaseAdmin
 		.from('scripts')
 		.update({ is_active: false })
-		.neq('id', 'placeholder');
+		.eq('is_active', true);
 
 	// Activate this one
 	await supabaseAdmin
