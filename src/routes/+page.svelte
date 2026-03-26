@@ -145,7 +145,7 @@
 			<div class="space-y-3">
 				{#each data.calls as call (call.id)}
 					<a
-						href={call.status === 'active' ? `/calls/${call.id}/live` : `/calls/${call.id}`}
+						href={`/calls/${call.id}`}
 						class="group block rounded-xl border border-surface-800 bg-surface-900 p-4 transition-colors hover:border-surface-700"
 					>
 						<div class="flex items-start justify-between">

@@ -57,6 +57,6 @@ export const actions: Actions = {
 			return fail(500, { error: 'Помилка збереження дзвінка' });
 		}
 
-		redirect(303, `/calls/${call.id}/live`);
+		return { success: true, phoneNumber };
 	}
 };
