@@ -40,7 +40,7 @@ function buildAgentConfig(script: Script) {
 			},
 			tts: {
 				voice_id: script.voice_id,
-				model_id: 'eleven_turbo_v2_5'
+				model_id: 'eleven_flash_v2_5'
 			}
 		}
 	};
