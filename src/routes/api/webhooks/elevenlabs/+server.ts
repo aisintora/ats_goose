@@ -6,19 +6,61 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const payload = await request.json();
-	console.log('Webhook payload:', JSON.stringify(payload).slice(0, 500));
+	console.log('Webhook received:', JSON.stringify(payload).slice(0, 800));
 
-	// Extract conversation_id from various payload formats
+	// Determine event type
+	const eventType = payload.type ?? payload.event_type ?? 'unknown';
 	const conversationId =
 		payload.data?.conversation_id ??
 		payload.conversation_id;
 
+	// --- CALL INITIATION (початок дзвінка) ---
+	if (eventType === 'conversation_initiation' || eventType === 'call.initiated' || payload.conversation_initiation_client_data) {
+		if (!conversationId) {
+			// Return empty conversation_initiation_client_data to ElevenLabs
+			return json({ dynamic_variables: {} });
+		}
+
+		// Check if call already exists
+		const { data: existing } = await supabaseAdmin
+			.from('calls')
+			.select('id')
+			.eq('conversation_id', conversationId)
+			.single();
+
+		if (!existing) {
+			// Find script by agent_id
+			const agentId = payload.data?.agent_id ?? payload.agent_id;
+			const { data: script } = await supabaseAdmin
+				.from('scripts')
+				.select('id')
+				.eq('agent_id', agentId)
+				.single();
+
+			if (script) {
+				const phoneNumber = payload.data?.from_number ?? payload.from_number ?? 'incoming';
+
+				await supabaseAdmin.from('calls').insert({
+					script_id: script.id,
+					direction: 'inbound',
+					phone_number: phoneNumber,
+					status: 'active',
+					conversation_id: conversationId
+				});
+				console.log(`Call started: ${conversationId}`);
+			}
+		}
+
+		return json({ dynamic_variables: {} });
+	}
+
+	// --- POST-CALL (кінець дзвінка) ---
 	if (!conversationId) {
-		console.log('No conversation_id in webhook, skipping');
+		console.log('No conversation_id, skipping');
 		return json({ ok: true, skipped: true });
 	}
 
-	// Find existing call or create one (inbound)
+	// Find existing call or create one
 	let { data: call } = await supabaseAdmin
 		.from('calls')
 		.select('id, script_id')
@@ -26,7 +68,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		.single();
 
 	if (!call) {
-		// Inbound call — find script by agent_id
+		// Call not tracked yet — create from ElevenLabs data
 		let conversation;
 		try {
 			conversation = await getConversation(conversationId);
@@ -42,7 +84,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			.single();
 
 		if (!script) {
-			console.error(`No script found for agent ${conversation.agent_id}`);
+			console.error(`No script for agent ${conversation.agent_id}`);
 			return json({ ok: false });
 		}
 
@@ -65,6 +107,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!newCall) return json({ ok: false });
 		call = newCall;
 	} else {
+		// Update status to completed
 		await supabaseAdmin
 			.from('calls')
 			.update({ status: 'completed', ended_at: new Date().toISOString() })
@@ -76,6 +119,12 @@ export const POST: RequestHandler = async ({ request }) => {
 		const conversation = await getConversation(conversationId);
 
 		if (conversation.transcript?.length) {
+			// Delete old entries if re-processing
+			await supabaseAdmin
+				.from('transcript_entries')
+				.delete()
+				.eq('call_id', call!.id);
+
 			const entries = conversation.transcript.map((item) => ({
 				call_id: call!.id,
 				speaker: item.role === 'agent' ? 'agent' : 'customer',
