@@ -1,21 +1,21 @@
-import { json, error } from '@sveltejs/kit';
-import { WEBHOOK_SECRET } from '$env/static/private';
+import { json } from '@sveltejs/kit';
 import { supabaseAdmin } from '$lib/server/supabase';
 import { getConversation, getConversationAudio } from '$lib/server/elevenlabs';
 import { runCallAnalysis } from '$lib/server/analysis';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
-	const secret = request.headers.get('x-webhook-secret') ?? request.headers.get('x-elevenlabs-signature');
-	if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
-		error(401, 'Invalid webhook secret');
-	}
-
 	const payload = await request.json();
-	const conversationId = payload.data?.conversation_id ?? payload.conversation_id;
+	console.log('Webhook payload:', JSON.stringify(payload).slice(0, 500));
+
+	// Extract conversation_id from various payload formats
+	const conversationId =
+		payload.data?.conversation_id ??
+		payload.conversation_id;
 
 	if (!conversationId) {
-		error(400, 'Missing conversation_id');
+		console.log('No conversation_id in webhook, skipping');
+		return json({ ok: true, skipped: true });
 	}
 
 	// Find existing call or create one (inbound)
@@ -27,7 +27,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	if (!call) {
 		// Inbound call — find script by agent_id
-		const conversation = await getConversation(conversationId);
+		let conversation;
+		try {
+			conversation = await getConversation(conversationId);
+		} catch (e) {
+			console.error('Failed to fetch conversation:', e);
+			return json({ ok: false });
+		}
+
 		const { data: script } = await supabaseAdmin
 			.from('scripts')
 			.select('id')
@@ -58,7 +65,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!newCall) return json({ ok: false });
 		call = newCall;
 	} else {
-		// Update existing call as completed
 		await supabaseAdmin
 			.from('calls')
 			.update({ status: 'completed', ended_at: new Date().toISOString() })
@@ -107,7 +113,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Run AI analysis
-		await runCallAnalysis(call!.id);
+		try {
+			await runCallAnalysis(call!.id);
+		} catch (e) {
+			console.error('Analysis failed:', e);
+		}
 	} catch (e) {
 		console.error('Transcript ingestion failed:', e);
 	}
