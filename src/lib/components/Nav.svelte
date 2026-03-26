@@ -3,8 +3,9 @@
 
 	const links = [
 		{ href: '/', label: 'Дашборд', icon: '📊' },
+		{ href: '/guide', label: 'Як це працює', icon: '📖' },
 		{ href: '/scripts/new', label: 'Новий скрипт', icon: '📝' },
-		{ href: '/calls/new', label: 'Новий дзвінок', icon: '📞' }
+		{ href: '/calls/new', label: 'Вихідний дзвінок', icon: '📞' }
 	];
 </script>
 

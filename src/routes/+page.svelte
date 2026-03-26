@@ -130,7 +130,7 @@
 				href="/calls/new"
 				class="rounded-lg border border-surface-700 px-4 py-2 text-sm font-medium text-surface-300 transition-colors hover:bg-surface-800"
 			>
-				Зателефонувати
+				Вихідний дзвінок
 			</a>
 		</div>
 

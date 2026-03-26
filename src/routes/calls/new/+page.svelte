@@ -13,7 +13,10 @@
 </script>
 
 <div class="mx-auto max-w-lg">
-	<h1 class="mb-6 text-2xl font-bold text-surface-100">Новий дзвінок</h1>
+	<h1 class="mb-2 text-2xl font-bold text-surface-100">Вихідний дзвінок</h1>
+	<p class="mb-6 text-sm text-surface-400">
+		AI-агент зателефонує на вказаний номер і проведе розмову за обраним скриптом.
+	</p>
 
 	{#if form?.error}
 		<div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
