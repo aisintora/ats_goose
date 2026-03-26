@@ -14,6 +14,7 @@ export type Script = {
 	voice_id: string;
 	language: Language;
 	agent_id: string | null;
+	is_active: boolean;
 	created_at: string;
 	updated_at: string;
 };

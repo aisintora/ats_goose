@@ -124,6 +124,8 @@ type ConversationResponse = {
 		phone_call?: {
 			from_number?: string;
 			to_number?: string;
+			external_number?: string;
+			agent_number?: string;
 		};
 	};
 	analysis?: {

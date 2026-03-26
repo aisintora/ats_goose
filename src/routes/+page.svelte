@@ -52,6 +52,13 @@
 		await fetch(`/api/calls/${callId}`, { method: 'DELETE' });
 		await invalidateAll();
 	}
+
+	async function activateScript(e: MouseEvent, scriptId: string) {
+		e.preventDefault();
+		e.stopPropagation();
+		await fetch(`/api/scripts/${scriptId}/activate`, { method: 'POST' });
+		await invalidateAll();
+	}
 </script>
 
 <div class="space-y-8">
@@ -78,13 +85,19 @@
 				{#each data.scripts as script (script.id)}
 					<a
 						href="/scripts/{script.id}"
-						class="group rounded-xl border border-surface-800 bg-surface-900 p-5 transition-colors hover:border-surface-700"
+						class="group rounded-xl border p-5 transition-colors
+							{script.is_active
+							? 'border-green-500/30 bg-green-500/5 hover:border-green-500/50'
+							: 'border-surface-800 bg-surface-900 hover:border-surface-700'}"
 					>
 						<div class="mb-3 flex items-start justify-between">
-							<h3 class="font-medium text-surface-100 group-hover:text-white">{script.name}</h3>
-							{#if script.agent_id}
-								<div class="h-2 w-2 rounded-full bg-green-500" title="Синхронізовано"></div>
-							{:else}
+							<div class="flex items-center gap-2">
+								<h3 class="font-medium text-surface-100 group-hover:text-white">{script.name}</h3>
+								{#if script.is_active}
+									<span class="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400">Активний</span>
+								{/if}
+							</div>
+							{#if !script.agent_id}
 								<div class="h-2 w-2 rounded-full bg-yellow-500" title="Не синхронізовано"></div>
 							{/if}
 						</div>
@@ -92,13 +105,18 @@
 							<span class="rounded-md bg-surface-800 px-2 py-0.5 text-xs text-surface-400">
 								{businessTypeLabels[script.business_type] ?? script.business_type}
 							</span>
-							<span class="rounded-md bg-surface-800 px-2 py-0.5 text-xs text-surface-400">
-								{script.language.toUpperCase()}
-							</span>
 						</div>
 						<p class="mt-3 line-clamp-2 text-xs text-surface-500">
 							{script.first_message || script.system_prompt.slice(0, 100)}
 						</p>
+						{#if !script.is_active && script.agent_id}
+							<button
+								onclick={(e) => activateScript(e, script.id)}
+								class="mt-3 rounded-md border border-surface-700 px-3 py-1 text-xs text-surface-400 transition-colors hover:border-green-500/30 hover:text-green-400"
+							>
+								Зробити активним
+							</button>
+						{/if}
 					</a>
 				{/each}
 			</div>

@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { onMount, onDestroy } from 'svelte';
+	import { goto, invalidateAll } from '$app/navigation';
+	import { supabase } from '$lib/supabase';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import TranscriptView from '$lib/components/TranscriptView.svelte';
 	import AudioPlayer from '$lib/components/AudioPlayer.svelte';
@@ -8,6 +10,26 @@
 	const { data } = $props();
 
 	let reanalyzing = $state(false);
+
+	// Auto-refresh when analysis arrives
+	onMount(() => {
+		if (!data.analysis && data.transcript.length > 0) {
+			// Analysis not ready yet — listen for it
+			const channel = supabase
+				.channel(`analysis-${data.call.id}`)
+				.on('postgres_changes', {
+					event: 'INSERT',
+					schema: 'public',
+					table: 'call_analyses',
+					filter: `call_id=eq.${data.call.id}`
+				}, () => {
+					invalidateAll();
+				})
+				.subscribe();
+
+			return () => { channel.unsubscribe(); };
+		}
+	});
 
 	function formatDuration(): string {
 		if (!data.call.ended_at) return '—';
@@ -21,7 +43,7 @@
 		reanalyzing = true;
 		try {
 			await fetch(`/api/calls/${data.call.id}/analyze`, { method: 'POST' });
-			window.location.reload();
+			await invalidateAll();
 		} finally {
 			reanalyzing = false;
 		}
@@ -69,9 +91,16 @@
 		<AudioPlayer url={data.call.audio_url} />
 	{/if}
 
-	<!-- Analysis first (more important for demo) -->
+	<!-- Analysis or Loading -->
 	{#if data.analysis}
 		<AnalysisCard analysis={data.analysis} />
+	{:else if data.transcript.length > 0}
+		<div class="rounded-xl border border-surface-800 bg-surface-900 p-6">
+			<div class="flex items-center gap-3">
+				<div class="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent"></div>
+				<p class="text-sm text-surface-400">Аналіз дзвінка в процесі...</p>
+			</div>
+		</div>
 	{/if}
 
 	<!-- Transcript -->

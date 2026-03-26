@@ -11,7 +11,6 @@
 <nav class="flex h-screen w-64 flex-col border-r border-surface-800 bg-surface-900">
 	<div class="border-b border-surface-800 p-6">
 		<h1 class="text-xl font-bold text-surface-100">AI Call Demo</h1>
-		<p class="mt-1 text-xs text-surface-500">Sintora Labs</p>
 	</div>
 
 	<div class="flex flex-1 flex-col gap-1 p-3">
