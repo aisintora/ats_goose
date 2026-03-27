@@ -57,7 +57,8 @@ export async function runCallAnalysis(callId: string): Promise<void> {
 		return;
 	}
 
-	const analysis = JSON.parse(textBlock.text) as {
+	const rawText = textBlock.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+	const analysis = JSON.parse(rawText) as {
 		summary: string;
 		sentiment: string;
 		script_adherence: number;
