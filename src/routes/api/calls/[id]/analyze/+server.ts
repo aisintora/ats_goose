@@ -67,5 +67,5 @@ export const POST: RequestHandler = async ({ params }) => {
 	await runCallAnalysis(params.id);
 	console.log(`[analyze] done`);
 
-	return json({ ok: true });
+	return json({ ok: true, version: 'v2-debug' });
 };
