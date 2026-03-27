@@ -31,7 +31,7 @@ export async function runCallAnalysis(callId: string): Promise<void> {
 
 	const response = await llm.messages.create({
 		model,
-		max_tokens: 2048,
+		max_tokens: 16384,
 		system: `Ти аналізуєш телефонну розмову між AI-агентом та клієнтом.
 Агент працював за таким скриптом: ${script?.system_prompt ?? 'невідомо'}
 
@@ -51,8 +51,11 @@ export async function runCallAnalysis(callId: string): Promise<void> {
 		]
 	});
 
-	const textBlock = response.content.find((b) => b.type === 'text');
-	if (!textBlock || textBlock.type !== 'text') return;
+	const textBlock = response.content.find((b: { type: string }) => b.type === 'text');
+	if (!textBlock || textBlock.type !== 'text') {
+		console.error('Analysis: no text block in response, got types:', response.content.map((b: { type: string }) => b.type));
+		return;
+	}
 
 	const analysis = JSON.parse(textBlock.text) as {
 		summary: string;
