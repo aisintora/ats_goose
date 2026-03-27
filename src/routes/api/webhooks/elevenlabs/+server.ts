@@ -100,12 +100,14 @@ export const POST: RequestHandler = async ({ request }) => {
 				.delete()
 				.eq('call_id', call!.id);
 
-			const entries = conversation.transcript.map((item) => ({
-				call_id: call!.id,
-				speaker: item.role === 'agent' ? 'agent' : 'customer',
-				text: item.message,
-				timestamp_ms: Math.round((item.time_in_call_secs ?? 0) * 1000)
-			}));
+			const entries = conversation.transcript
+				.filter((item) => item.message)
+				.map((item) => ({
+					call_id: call!.id,
+					speaker: item.role === 'agent' ? 'agent' : 'customer',
+					text: item.message,
+					timestamp_ms: Math.round((item.time_in_call_secs ?? 0) * 1000)
+				}));
 
 			await supabaseAdmin.from('transcript_entries').insert(entries);
 		}
