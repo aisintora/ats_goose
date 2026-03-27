@@ -20,10 +20,14 @@ export const POST: RequestHandler = async ({ params }) => {
 
 	console.log(`[analyze] call=${params.id} conversation_id=${call.conversation_id} transcript_count=${count} countErr=${JSON.stringify(countErr)}`);
 
+	const debug: Record<string, unknown> = {};
+
 	if ((count ?? 0) === 0 && call.conversation_id) {
-		console.log(`[analyze] fetching transcript from ElevenLabs for ${call.conversation_id}`);
+		debug.enteredFetchBlock = true;
 		const conversation = await getConversation(call.conversation_id);
-		console.log(`[analyze] ElevenLabs returned ${conversation.transcript?.length ?? 0} entries, has_audio=${conversation.has_audio}`);
+		debug.elevenLabsTranscriptLength = conversation.transcript?.length ?? 'undefined';
+		debug.elevenLabsHasAudio = conversation.has_audio;
+		debug.elevenLabsStatus = conversation.status;
 
 		if (conversation.transcript?.length) {
 			const entries = conversation.transcript.map((item) => ({
@@ -72,5 +76,5 @@ export const POST: RequestHandler = async ({ params }) => {
 		.select('id', { count: 'exact', head: true })
 		.eq('call_id', params.id);
 
-	return json({ ok: true, version: 'v3-debug', initialCount: count, countErr, finalCount, conversationId: call.conversation_id });
+	return json({ ok: true, version: 'v4-debug', initialCount: count, countErr, finalCount, conversationId: call.conversation_id, debug });
 };
