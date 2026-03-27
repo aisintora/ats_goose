@@ -37,7 +37,9 @@ export const POST: RequestHandler = async ({ params }) => {
 				timestamp_ms: Math.round((item.time_in_call_secs ?? 0) * 1000)
 			}));
 			const { error: insertErr } = await supabaseAdmin.from('transcript_entries').insert(entries);
-			console.log(`[analyze] inserted ${entries.length} transcript entries, error=${JSON.stringify(insertErr)}`);
+			debug.insertErr = insertErr;
+			debug.insertedCount = entries.length;
+			debug.sampleEntry = entries[0];
 		}
 
 		const { data: callData } = await supabaseAdmin
