@@ -67,5 +67,10 @@ export const POST: RequestHandler = async ({ params }) => {
 	await runCallAnalysis(params.id);
 	console.log(`[analyze] done`);
 
-	return json({ ok: true, version: 'v2-debug' });
+	const { count: finalCount } = await supabaseAdmin
+		.from('transcript_entries')
+		.select('id', { count: 'exact', head: true })
+		.eq('call_id', params.id);
+
+	return json({ ok: true, version: 'v3-debug', initialCount: count, countErr, finalCount, conversationId: call.conversation_id });
 };
