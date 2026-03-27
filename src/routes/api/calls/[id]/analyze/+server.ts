@@ -13,60 +13,59 @@ export const POST: RequestHandler = async ({ params }) => {
 
 	if (!call) error(404, 'Call not found');
 
-	// If no transcript entries, try to fetch from ElevenLabs
-	const { count } = await supabaseAdmin
+	const { count, error: countErr } = await supabaseAdmin
 		.from('transcript_entries')
 		.select('id', { count: 'exact', head: true })
 		.eq('call_id', params.id);
 
+	console.log(`[analyze] call=${params.id} conversation_id=${call.conversation_id} transcript_count=${count} countErr=${JSON.stringify(countErr)}`);
+
 	if ((count ?? 0) === 0 && call.conversation_id) {
-		try {
-			const conversation = await getConversation(call.conversation_id);
+		console.log(`[analyze] fetching transcript from ElevenLabs for ${call.conversation_id}`);
+		const conversation = await getConversation(call.conversation_id);
+		console.log(`[analyze] ElevenLabs returned ${conversation.transcript?.length ?? 0} entries, has_audio=${conversation.has_audio}`);
 
-			if (conversation.transcript?.length) {
-				const entries = conversation.transcript.map((item) => ({
-					call_id: call.id,
-					speaker: item.role === 'agent' ? 'agent' : 'customer',
-					text: item.message,
-					timestamp_ms: Math.round((item.time_in_call_secs ?? 0) * 1000)
-				}));
-				await supabaseAdmin.from('transcript_entries').insert(entries);
-			}
-
-			// Also fetch audio if missing
-			const { data: callData } = await supabaseAdmin
-				.from('calls')
-				.select('audio_url')
-				.eq('id', params.id)
-				.single();
-
-			if (!callData?.audio_url && conversation.has_audio) {
-				try {
-					const audioBuffer = await getConversationAudio(call.conversation_id);
-					const fileName = `${call.id}.mp3`;
-					await supabaseAdmin.storage
-						.from('call-recordings')
-						.upload(fileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-					const { data: urlData } = supabaseAdmin.storage
-						.from('call-recordings')
-						.getPublicUrl(fileName);
-					await supabaseAdmin
-						.from('calls')
-						.update({ audio_url: urlData.publicUrl })
-						.eq('id', call.id);
-				} catch (e) {
-					console.error('Audio fetch failed:', e);
-				}
-			}
-		} catch (e) {
-			console.error('Failed to fetch conversation from ElevenLabs:', e);
+		if (conversation.transcript?.length) {
+			const entries = conversation.transcript.map((item) => ({
+				call_id: call.id,
+				speaker: item.role === 'agent' ? 'agent' : 'customer',
+				text: item.message,
+				timestamp_ms: Math.round((item.time_in_call_secs ?? 0) * 1000)
+			}));
+			const { error: insertErr } = await supabaseAdmin.from('transcript_entries').insert(entries);
+			console.log(`[analyze] inserted ${entries.length} transcript entries, error=${JSON.stringify(insertErr)}`);
 		}
+
+		const { data: callData } = await supabaseAdmin
+			.from('calls')
+			.select('audio_url')
+			.eq('id', params.id)
+			.single();
+
+		if (!callData?.audio_url && conversation.has_audio) {
+			const audioBuffer = await getConversationAudio(call.conversation_id);
+			const fileName = `${call.id}.mp3`;
+			await supabaseAdmin.storage
+				.from('call-recordings')
+				.upload(fileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+			const { data: urlData } = supabaseAdmin.storage
+				.from('call-recordings')
+				.getPublicUrl(fileName);
+			await supabaseAdmin
+				.from('calls')
+				.update({ audio_url: urlData.publicUrl })
+				.eq('id', call.id);
+			console.log(`[analyze] uploaded audio`);
+		}
+	} else {
+		console.log(`[analyze] skipping ElevenLabs fetch: count=${count}, conversation_id=${call.conversation_id}`);
 	}
 
-	// Delete existing analysis to re-run
 	await supabaseAdmin.from('call_analyses').delete().eq('call_id', params.id);
 
+	console.log(`[analyze] running analysis...`);
 	await runCallAnalysis(params.id);
+	console.log(`[analyze] done`);
 
 	return json({ ok: true });
 };
