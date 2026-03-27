@@ -11,24 +11,34 @@
 
 	let reanalyzing = $state(false);
 
-	// Auto-refresh when analysis arrives
 	onMount(() => {
-		if (!data.analysis && data.transcript.length > 0) {
-			// Analysis not ready yet — listen for it
-			const channel = supabase
-				.channel(`analysis-${data.call.id}`)
-				.on('postgres_changes', {
-					event: 'INSERT',
-					schema: 'public',
-					table: 'call_analyses',
-					filter: `call_id=eq.${data.call.id}`
-				}, () => {
-					invalidateAll();
-				})
-				.subscribe();
+		// Listen for new transcript entries and analysis
+		const channel = supabase
+			.channel(`call-detail-${data.call.id}`)
+			.on('postgres_changes', {
+				event: 'INSERT',
+				schema: 'public',
+				table: 'call_analyses',
+				filter: `call_id=eq.${data.call.id}`
+			}, () => {
+				invalidateAll();
+			})
+			.on('postgres_changes', {
+				event: 'INSERT',
+				schema: 'public',
+				table: 'transcript_entries',
+				filter: `call_id=eq.${data.call.id}`
+			}, () => {
+				invalidateAll();
+			})
+			.subscribe();
 
-			return () => { channel.unsubscribe(); };
+		// Auto-sync: if completed call has no transcript, fetch from ElevenLabs
+		if (data.call.status === 'completed' && data.transcript.length === 0 && data.call.conversation_id) {
+			fetch(`/api/calls/${data.call.id}/analyze`, { method: 'POST' });
 		}
+
+		return () => { channel.unsubscribe(); };
 	});
 
 	function formatDuration(): string {
